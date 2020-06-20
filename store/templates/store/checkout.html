@@ -1,0 +1,181 @@
+{% extends 'store/main.html' %}
+{% load static %}
+
+{% block content %}
+<div class="row">
+    <div class="col-lg-6">
+        <div id="form-wrapper" class="box-element">
+            <form id="form">
+                <div id="user-info" class="form-row">
+                    <div class="col">
+                        <input type="text" class="form-control" placeholder="Name" name="name">
+                    </div>
+                    <div class="col">
+                        <input type="text" class="form-control" placeholder="Email" name="email">
+                    </div>
+                    <br>
+                </div>
+                <div id="shipping-info">
+                    <br>
+                    <h3>Shipping Info</h3>
+                    <hr>
+                    <div class="form-row">
+                        <div class="form-group col">
+                            <label>Address</label>
+                            <input type="text" class="form-control" placeholder="Address" name="address">
+                        </div>
+
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group col-6">
+                            <label>City</label>
+                            <input type="text" class="form-control" placeholder="City" name="city">
+                        </div>
+                        <div class="form-group col-3">
+                            <label>State</label>
+
+                            <input type="text" class="form-control" placeholder="State" name="state">
+                        </div>
+                        <div class="form-group col-3">
+                            <label>Zipcode</label>
+                            <input type="text" class="form-control" placeholder="Zipcode" name="zipcode">
+                        </div>
+                    </div>
+                </div>
+                <hr>
+                <input id="form-continue" type="submit" value="Continue" class="btn btn-outline-success" />
+            </form>
+        </div>
+
+        <div class="box-element" hidden id="payment-info">
+            <small>Paypal Options</small>
+            <div id="paypal-button-container"></div>
+        </div>
+
+    </div>
+    <div class="col-lg-6">
+        <div class="box-element">
+            <a href="{% url 'cart' %}" class="btn btn-outline-dark">&#x2190; Back to Cart</a>
+            <hr>
+            <h3>Order Summary</h3>
+            <hr>
+            {% for item in items %}
+            <div class="cart-row">
+                <div style="flex:2"><img src="{{ item.product.imageURL }}" alt=""></div>
+                <div style="flex:2">{{ item.product.name }}</div>
+                <div style="flex:1">${{ item.product.price }}</div>
+                <div style="flex:1">{{ item.quantity }}</div>
+                <div style="flex:1">{{ item.get_total }}</div>
+            </div>
+            {% endfor %}
+
+            <h5>Items: {{ order.get_cart_items }}</h5>
+            <h5>Total: ${{ order.get_cart_total|floatformat:2 }}</h5>
+        </div>
+    </div>
+</div>
+<script src="https://www.paypal.com/sdk/js?client-id=AWbL2VQW4yJSYDE9gjY8pSFGQ15pn5Q6pyN7AbzPzwrsPOq1DbXdiDDqiRAoiANcjLKfTkKS4hA1CjkM&currency=USD"></script>
+<script type="text/javascript">
+    const total = '{{order.get_cart_total}}'
+    // Render the PayPal button into #paypal-button-container
+    paypal.Buttons({
+        style: {
+            color: 'blue',
+            shape: 'rect'
+        },
+        // Set up the transaction
+        createOrder: function (data, actions) {
+            return actions.order.create({
+                purchase_units: [{
+                    amount: {
+                        value: parseFloat(total).toFixed(2).toString()
+                    }
+                }]
+            });
+        },
+
+        // Finalize the transaction
+        onApprove: function (data, actions) {
+            return actions.order.capture().then(function (details) {
+                submitFormData();
+            });
+        }
+
+
+    }).render('#paypal-button-container');
+</script>
+<script type="text/javascript">
+    const shipping = '{{ order.shipping }}'
+    const isShipping = shipping !== 'False';
+
+    if (!isShipping) {
+        document.querySelector('#shipping-info').remove()
+    }
+
+    if (isLoggedIn) {
+        document.querySelector('#user-info').remove()
+    }
+
+    if (!isShipping && isLoggedIn) {
+        document.querySelector('#form-wrapper').remove()
+        document.querySelector('#payment-info').hidden = false;
+    } else {
+        const form = document.querySelector('#form');
+
+        form.addEventListener('submit', function (event) {
+            event.preventDefault();
+            document.querySelector('#form-continue').hidden = true;
+            document.querySelector('#payment-info').hidden = false;
+        });
+    }
+
+    // document.querySelector('#make-payment').addEventListener('click', function (event) {
+    //     submitFormData();
+    // });
+
+    function submitFormData() {
+        const userFormData = {
+            name: null,
+            email: null,
+            total
+        }
+
+        const shippingInfo = {
+            address: null,
+            city: null,
+            state: null,
+            zipcode: null,
+        }
+
+        if (isShipping) {
+            shippingInfo.address = form.address.value
+            shippingInfo.city = form.city.value
+            shippingInfo.state = form.state.value
+            shippingInfo.zipcode = form.zipcode.value
+        }
+
+        if (!isLoggedIn) {
+            userFormData.name = form.name.value
+            userFormData.email = form.email.value
+        }
+
+        const url = '/process_order/';
+        const body = { form: userFormData, shipping: shippingInfo };
+
+        fetch(url, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': csrftoken,
+            },
+            body: JSON.stringify(body)
+        }).then(response => {
+            return response.json();
+        }).then(data => {
+            cart = {}
+            document.cookie = `cart=${JSON.stringify(cart)};domain=;path=/`;
+            location.href = "{% url 'store'%}";
+        })
+    }
+</script>
+{% endblock content %}
